@@ -1,4 +1,4 @@
-use inquire;
+use inquire::Select;
 use netstat2::{AddressFamilyFlags, ProtocolFlags};
 
 fn main() {
@@ -10,5 +10,15 @@ fn main() {
         Err(err) => panic!("error getting socket info: {err:?}"),
     };
 
-    println!("socket info ex: {:?}", socket_info[0]);
+    let socket_info_names: Vec<String> = socket_info
+        .iter()
+        .map(|socket| format!(":{}", socket.local_port()))
+        .collect();
+
+    let selection = Select::new("Active ports:", socket_info_names.clone()).prompt();
+
+    match selection {
+        Ok(choice) => println!("good choice!: {choice}"),
+        Err(_) => println!("there was an error, please try again"),
+    };
 }
