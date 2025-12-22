@@ -12,7 +12,7 @@ fn main() {
 
     let socket_info_names: Vec<String> = socket_info
         .iter()
-        .map(|socket| format!(":{}", socket.local_port()))
+        .map(|socket| format!("Port :{}", socket.local_port()))
         .collect();
 
     let selection = Select::new("Active ports:", socket_info_names.clone()).prompt();
