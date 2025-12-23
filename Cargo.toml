@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 inquire = "0.9.1"
 netstat2 = "0.11.2"
+sysinfo = "0.37.2"
