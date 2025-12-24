@@ -1,7 +1,7 @@
 use core::fmt;
 use inquire::Select;
 use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use sysinfo::{Pid, System};
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,7 @@ fn create_choices_vec() -> Vec<Choices> {
     vec![Choices::Kill, Choices::ViewDetails]
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct PortInfo {
     port_number: u16,
     pid: u32,
@@ -47,6 +47,18 @@ impl fmt::Display for PortInfo {
     }
 }
 
+impl Clone for PortInfo {
+    fn clone(&self) -> Self {
+        PortInfo {
+            port_number: self.port_number.clone(),
+            pid: self.pid.clone(),
+            process_name: self.process_name.clone(),
+            protocol: self.protocol.clone(),
+            port_status: self.port_status.clone(),
+        }
+    }
+}
+
 // TODO: ***********************************************************************
 // TODO: REALLY FLESH OUT THE PORT PART FIRST, MAKE IT AWESOME, THEN WORK ON
 // TODO: THE PROCESS PART OF THE PROGRAM
@@ -58,6 +70,7 @@ struct Manager {
     port_infos: Vec<PortInfo>,
     by_port: HashMap<u16, Vec<usize>>,    // port -> socket indices
     by_process: HashMap<u32, Vec<usize>>, // pid -> socket indices
+    system_info: System,
 }
 // TODO: Process-part of the Manager
 // process_info: Vec<sysinfo::Process>,
@@ -68,7 +81,70 @@ impl Manager {
             port_infos: vec![],
             by_port: HashMap::new(),
             by_process: HashMap::new(),
+            system_info: System::new(),
             // process_info: vec![],
+        }
+    }
+
+    fn handle_selected(self, picked: PortInfo) {
+        let selection = Select::new(
+            format!(
+                "What would you like to do with {:?}:{:?}?",
+                picked.process_name, picked.port_number,
+            )
+            .as_str(),
+            create_choices_vec(),
+        )
+        .prompt();
+
+        match selection {
+            Ok(choice) => self.handle_event(choice, picked),
+            Err(_) => println!("there was an error picking a choice"),
+        }
+    }
+
+    fn handle_event(self, event: Choices, picked: PortInfo) {
+        match event {
+            Choices::Kill => {
+                self.kill_process_by_pid(picked.pid);
+                println!("kill: {}", picked.process_name);
+            }
+            Choices::ViewDetails => println!("{}", picked.process_name),
+        };
+    }
+
+    fn kill_process_by_pid(&self, pid: u32) -> bool {
+        let process = match self.system_info.process(Pid::from_u32(pid)) {
+            Some(process) => process,
+            None => return false,
+        };
+
+        println!("found process to kill:");
+        println!("process: {:?}", process.name());
+        println!("process pid: {}", process.pid());
+        println!("process runtime: {:?}", process.run_time());
+        println!("process disk usage: {:?}", process.disk_usage());
+
+        process.kill()
+    }
+
+    fn kill_process_by_port(self, port: u16) {
+        // need to get processes associated with the port
+        let list_of_indexes_to_port_infos = match self.by_port.get(&port) {
+            Some(list) => list,
+            None => return,
+        };
+
+        let mut unique_pids = HashSet::new();
+        for index in list_of_indexes_to_port_infos {
+            unique_pids.insert(self.port_infos[*index].clone().pid);
+        }
+
+        for pid in unique_pids {
+            let success = self.kill_process_by_pid(pid);
+            if !success {
+                println!("failed to send kill message for pid: {}", pid)
+            }
         }
     }
 }
@@ -82,12 +158,11 @@ fn main() {
         Err(err) => panic!("error getting socket info: {err:?}"),
     };
 
-    let mut sysinfo = System::new();
-    sysinfo.refresh_all();
-
-    let proc = sysinfo.processes();
-
+    // let mut sysinfo = System::new();
     let mut manager = Manager::new();
+    manager.system_info.refresh_all();
+
+    let proc = manager.system_info.processes();
     let mut i = 0;
 
     for socket in socket_info.clone() {
@@ -132,38 +207,12 @@ fn main() {
 
     let selection = Select::new(
         "List of processes:\nPid:Port -- Name -- Status -- Protocol",
-        manager.port_infos,
+        manager.port_infos.clone(),
     )
     .prompt();
 
     match selection {
-        Ok(choice) => handle_selected(choice), // functionality goes here
+        Ok(choice) => manager.handle_selected(choice), // functionality goes here
         Err(_) => println!("there was an error, please try again"),
-    };
-}
-
-fn handle_selected(picked: PortInfo) {
-    // let choices = vec!["Kill", "ViewDetails"];
-
-    let selection = Select::new(
-        format!(
-            "What would you like to do with {:?}:{:?}?",
-            picked.process_name, picked.port_number,
-        )
-        .as_str(),
-        create_choices_vec(),
-    )
-    .prompt();
-
-    match selection {
-        Ok(choice) => handle_event(choice, picked),
-        Err(_) => println!("there was an error picking a choice"),
-    }
-}
-
-fn handle_event(event: Choices, info: PortInfo) {
-    match event {
-        Choices::Kill => println!("kill: {}", info.process_name),
-        Choices::ViewDetails => println!("view details: {}", info.process_name),
     };
 }
