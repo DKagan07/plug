@@ -10,6 +10,24 @@ enum ProtocolInfo {
     UDP,
 }
 
+enum Choices {
+    Kill,
+    ViewDetails,
+}
+
+impl fmt::Display for Choices {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Choices::Kill => write!(f, "Kill"),
+            Choices::ViewDetails => write!(f, "View Details"),
+        }
+    }
+}
+
+fn create_choices_vec() -> Vec<Choices> {
+    vec![Choices::Kill, Choices::ViewDetails]
+}
+
 #[derive(Debug, Clone)]
 struct PortInfo {
     port_number: u16,
@@ -28,6 +46,11 @@ impl fmt::Display for PortInfo {
         )
     }
 }
+
+// TODO: ***********************************************************************
+// TODO: REALLY FLESH OUT THE PORT PART FIRST, MAKE IT AWESOME, THEN WORK ON
+// TODO: THE PROCESS PART OF THE PROGRAM
+// TODO: ***********************************************************************
 
 #[derive(Debug)]
 struct Manager {
@@ -114,7 +137,33 @@ fn main() {
     .prompt();
 
     match selection {
-        Ok(choice) => println!("good choice!: {choice}"),
+        Ok(choice) => handle_selected(choice), // functionality goes here
         Err(_) => println!("there was an error, please try again"),
+    };
+}
+
+fn handle_selected(picked: PortInfo) {
+    // let choices = vec!["Kill", "ViewDetails"];
+
+    let selection = Select::new(
+        format!(
+            "What would you like to do with {:?}:{:?}?",
+            picked.process_name, picked.port_number,
+        )
+        .as_str(),
+        create_choices_vec(),
+    )
+    .prompt();
+
+    match selection {
+        Ok(choice) => handle_event(choice, picked),
+        Err(_) => println!("there was an error picking a choice"),
+    }
+}
+
+fn handle_event(event: Choices, info: PortInfo) {
+    match event {
+        Choices::Kill => println!("kill: {}", info.process_name),
+        Choices::ViewDetails => println!("view details: {}", info.process_name),
     };
 }
