@@ -29,13 +29,15 @@ impl fmt::Display for PortInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Manager {
+    // Port-part of the Manager
     port_infos: Vec<PortInfo>,
-
     by_port: HashMap<u16, Vec<usize>>,    // port -> socket indices
     by_process: HashMap<u32, Vec<usize>>, // pid -> socket indices
 }
+// TODO: Process-part of the Manager
+// process_info: Vec<sysinfo::Process>,
 
 impl Manager {
     fn new() -> Manager {
@@ -43,6 +45,7 @@ impl Manager {
             port_infos: vec![],
             by_port: HashMap::new(),
             by_process: HashMap::new(),
+            // process_info: vec![],
         }
     }
 }
@@ -68,7 +71,7 @@ fn main() {
         for assoc_pid in socket.associated_pids.clone() {
             let process = match proc.get(&Pid::from_u32(assoc_pid)) {
                 Some(p) => p,
-                None => return,
+                None => continue,
             };
 
             let (protocol, state) = match &socket.protocol_socket_info {
