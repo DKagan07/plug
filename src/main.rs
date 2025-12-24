@@ -1,3 +1,4 @@
+use core::fmt;
 use inquire::Select;
 use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo};
 use std::collections::HashMap;
@@ -16,6 +17,16 @@ struct PortInfo {
     process_name: String,
     protocol: ProtocolInfo,
     port_status: String,
+}
+
+impl fmt::Display for PortInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}:{} -- {} Status: {} -- Protocol: {:?}",
+            self.pid, self.port_number, self.process_name, self.port_status, self.protocol
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -93,20 +104,9 @@ fn main() {
         }
     }
 
-    let p_i = manager
-        .port_infos
-        .iter()
-        .map(|pi| {
-            format!(
-                "{}:{} -- {} Status: {} -- Protocol: {:?}",
-                pi.pid, pi.port_number, pi.process_name, pi.port_status, pi.protocol
-            )
-        })
-        .collect();
-
     let selection = Select::new(
         "List of processes:\nPid:Port -- Name -- Status -- Protocol",
-        p_i,
+        manager.port_infos,
     )
     .prompt();
 
