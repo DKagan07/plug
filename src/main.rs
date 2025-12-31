@@ -1,8 +1,9 @@
+use chrono::{DateTime, Local, TimeZone, Utc};
 use core::fmt;
 use inquire::Select;
 use netstat2::{AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo};
 use std::collections::{HashMap, HashSet};
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, Process, System};
 
 #[derive(Debug, Clone)]
 enum ProtocolInfo {
@@ -59,6 +60,24 @@ impl Clone for PortInfo {
     }
 }
 
+impl PortInfo {
+    fn display_specs(&self, proc: &Process) {
+        let local = Local::now();
+        let start_time: DateTime<Utc> = Utc.timestamp_opt(proc.start_time() as i64, 0).unwrap();
+        let tz = local.timezone();
+        let current_time = start_time.with_timezone(&tz);
+
+        println!("in display specs!");
+        println!("Port number: {}", self.port_number);
+        println!("Port status: {}", self.port_status);
+        println!("Memory Usage: {} bytes", proc.memory());
+        println!("CPU Usage: {}%", proc.cpu_usage());
+        println!("Run time: {}", human_readable_date(proc.run_time()));
+        println!("Start time: {} UTC", current_time);
+        println!("Command: {:?}", proc.cmd());
+    }
+}
+
 // TODO: ***********************************************************************
 // TODO: REALLY FLESH OUT THE PORT PART FIRST, MAKE IT AWESOME, THEN WORK ON
 // TODO: THE PROCESS PART OF THE PROGRAM
@@ -104,24 +123,27 @@ impl Manager {
     }
 
     fn handle_event(self, event: Choices, picked: PortInfo) {
+        let process = match self.system_info.process(Pid::from_u32(picked.pid)) {
+            Some(process) => process,
+            None => return,
+        };
+
         match event {
             Choices::Kill => {
-                self.kill_process_by_pid(picked.pid);
+                self.kill_process_by_pid(picked.pid, process);
                 println!("kill: {}", picked.process_name);
             }
-            Choices::ViewDetails => println!("{}", picked.process_name),
+            Choices::ViewDetails => {
+                println!("{}", picked.process_name);
+                picked.display_specs(process);
+            }
         };
     }
 
-    fn kill_process_by_pid(&self, pid: u32) -> bool {
-        let process = match self.system_info.process(Pid::from_u32(pid)) {
-            Some(process) => process,
-            None => return false,
-        };
-
+    fn kill_process_by_pid(&self, pid: u32, process: &Process) -> bool {
         println!("found process to kill:");
         println!("process: {:?}", process.name());
-        println!("process pid: {}", process.pid());
+        println!("process pid: {}", pid);
         println!("process runtime: {:?}", process.run_time());
         println!("process disk usage: {:?}", process.disk_usage());
 
@@ -141,7 +163,12 @@ impl Manager {
         }
 
         for pid in unique_pids {
-            let success = self.kill_process_by_pid(pid);
+            let process = match self.system_info.process(Pid::from_u32(pid)) {
+                Some(process) => process,
+                None => return,
+            };
+
+            let success = self.kill_process_by_pid(pid, process);
             if !success {
                 println!("failed to send kill message for pid: {}", pid)
             }
@@ -215,4 +242,18 @@ fn main() {
         Ok(choice) => manager.handle_selected(choice), // functionality goes here
         Err(_) => println!("there was an error, please try again"),
     };
+}
+
+fn human_readable_date(secs: u64) -> String {
+    let days = secs / 86400;
+    let hours = (secs % 86400) / 3600;
+    let minutes = (secs % 3600) / 60;
+    let seconds = secs % 60;
+
+    match (days, hours, minutes, seconds) {
+        (0, 0, 0, s) => format!("{s}s"),
+        (0, 0, m, s) => format!("{m}m {s}s"),
+        (0, h, m, s) => format!("{h}h {m}m {s}s"),
+        (d, h, m, s) => format!("{d}d {h}h {m}m {s}s"),
+    }
 }
